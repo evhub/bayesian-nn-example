@@ -4,7 +4,7 @@ run: setup
 
 .PHONY: setup
 setup:
-	pip install numpy tensorflow edward
+	pip install numpy matplotlib tensorflow edward
 
 .PHONY: clean
 clean:
