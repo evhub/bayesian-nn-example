@@ -51,6 +51,7 @@ def build_weights(layer_index, input_dim, output_dim):
 
 
 def build_nn(X, W_0, b_0, W_1, b_1, W_2, b_2):
+    """Construct a neural network from the given parameters."""
     return sequential_model(X, [
         partial(fully_connected, W_0, b_0, tf.tanh),
         partial(fully_connected, W_1, b_1, tf.tanh),
@@ -59,26 +60,21 @@ def build_nn(X, W_0, b_0, W_1, b_1, W_2, b_2):
 
 
 def estimate_noise(y_train, verbose=True):
+    """Estimate the noise in the training data with a difference-based method."""
     N, = y_train.shape
-    noise_sd = np.std(np.diff(y_train))
+    noise_sd = np.std(np.diff(y_train))/2
     if verbose:
-        print("noise_sd =", noise_sd)
+        print("noise_sd ~=", noise_sd)
     return noise_sd
 
 
-def build_model(X_train, noise_sd=0.05, neurons=10, verbose=True):
+def build_model(X_train, noise_sd, neurons=10, verbose=True):
     """Return (y model, parameters)."""
     N, D = X_train.shape
 
     W_0, qW_0, b_0, qb_0 = build_weights(0, D, neurons)
     W_1, qW_1, b_1, qb_1 = build_weights(1, neurons, neurons)
     W_2, qW_2, b_2, qb_2 = build_weights(2, neurons, 1)
-
-    X = tf.cast(X_train, dtype=tf.float32)
-    y = Normal(
-        loc=build_nn(X, W_0, b_0, W_1, b_1, W_2, b_2),
-        scale=noise_sd * tf.ones(N),
-    )
 
     parameters = OrderedDict([
         (W_0, qW_0),
@@ -88,6 +84,12 @@ def build_model(X_train, noise_sd=0.05, neurons=10, verbose=True):
         (W_2, qW_2),
         (b_2, qb_2),
     ])
+
+    X = tf.cast(X_train, dtype=tf.float32)
+    y = Normal(
+        loc=build_nn(X, *parameters.keys()),
+        scale=noise_sd * tf.ones(N),
+    )
 
     return y, parameters
 
@@ -191,10 +193,12 @@ def generate_toy_data(N=200, noise_sd=0.05, plot=False):
 def main(argv):
     """Generate toy data, run inference, and evaluate model."""
     # generate data
-    X_train, y_train = generate_toy_data()
+    plt.title("Training Data")
+    X_train, y_train = generate_toy_data(plot=True)
 
     # construct model
-    y, parameters = build_model(X_train)
+    noise_sd = estimate_noise(y_train)
+    y, parameters = build_model(X_train, noise_sd)
 
     # evaluate prior
     inputs, samples = build_sampler(parameters, X_train)
