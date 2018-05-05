@@ -3,6 +3,7 @@ from functools import partial
 
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 import edward as ed
 
 from edward.models import Normal
@@ -39,7 +40,7 @@ def build_weights(layer_index, input_dim, output_dim):
 
     return W, qW, b, qb
 
-def build_model(X_train, neurons):
+def build_model(X_train, neurons=10, noise_sd=0.1):
     N, D = X_train.shape
 
     W_0, qW_0, b_0, qb_0 = build_weights(0, D, neurons)
@@ -53,7 +54,7 @@ def build_model(X_train, neurons):
     ])
 
     X = tf.cast(X_train, dtype=tf.float32)
-    y = Normal(loc=model(X), scale=0.1 * tf.ones(N))
+    y = Normal(loc=model(X), scale=noise_sd * tf.ones(N))
 
     parameters = {
         W_0: qW_0,
@@ -62,16 +63,23 @@ def build_model(X_train, neurons):
         b_1: qb_1,
     }
 
-    return parameters, y
+    return y, parameters
 
-def build_inference(X_train, y_train, neurons=10):
-    parameters, y = build_model(X_train, neurons)
+def build_inference(y, parameters, y_train):
     return ed.KLqp(parameters, data={y: y_train})
 
 def run_inference(inference, num_iters=1000, logdir="./log"):
     if not os.path.exists(logdir):
         os.mkdir(logdir)
     inference.run(n_iter=num_iters, logdir=logdir)
+
+def plot_posterior(y, parameters, y_train, num_bins=10):
+    y_post = ed.copy(y, parameters)
+    def T(xs, zs):
+        return tf.reduce_mean(tf.cast(xs[y_post], tf.float32))
+    Ty_rep, Ty = ed.ppc(T, data={y_post: y_train})
+    ed.ppc_stat_hist_plot(Ty, Ty_rep, bins=num_bins)
+    plt.show()
 
 def generate_toy_data(N=40, noise_sd=0.1):
     raw_X = np.concatenate([
@@ -84,8 +92,10 @@ def generate_toy_data(N=40, noise_sd=0.1):
 
 def main(_):
     X_train, y_train = generate_toy_data()
-    inference = build_inference(X_train, y_train)
+    y, parameters = build_model(X_train)
+    inference = build_inference(y, parameters, y_train)
     run_inference(inference)
+    plot_posterior(y, parameters, y_train)
 
 if __name__ == "__main__":
     tf.app.run()
