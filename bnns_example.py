@@ -60,15 +60,15 @@ def build_nn(X, W_0, b_0, W_1, b_1, W_2, b_2):
 
 
 def estimate_noise(y_train, verbose=True):
-    """Estimate the noise in the training data with a difference-based method."""
+    """Estimate the noise in the training data with a finite difference method."""
     N, = y_train.shape
-    noise_sd = np.std(np.diff(y_train))/2
+    sig = np.std(np.diff(y_train))/2
     if verbose:
-        print("noise_sd ~=", noise_sd)
-    return noise_sd
+        print("sig ~=", sig)
+    return sig
 
 
-def build_model(X_train, noise_sd, neurons=10, verbose=True):
+def build_model(X_train, sig, neurons=10, verbose=True):
     """Return (y model, parameters)."""
     N, D = X_train.shape
 
@@ -88,7 +88,7 @@ def build_model(X_train, noise_sd, neurons=10, verbose=True):
     X = tf.cast(X_train, dtype=tf.float32)
     y = Normal(
         loc=build_nn(X, *parameters.keys()),
-        scale=noise_sd * tf.ones(N),
+        scale=sig * tf.ones(N),
     )
 
     return y, parameters
@@ -178,12 +178,11 @@ def plot_model(inputs, samples, X_test, y_test):
 
 def generate_toy_data(N=200, noise_sd=0.05, plot=False):
     """Generate (X, y)."""
-    raw_X = np.concatenate([
-        np.linspace(0, 0.9*np.pi, num=N//2),
-        np.linspace(1.1*np.pi, 2*np.pi, num=(N+1)//2),
+    X = np.concatenate([
+        np.linspace(-1, -0.1, num=N//2),
+        np.linspace(0.1, 1, num=(N+1)//2),
     ])
-    y = np.sin(raw_X) + np.random.normal(0, noise_sd, size=N)
-    X = (raw_X - np.pi)/(np.pi)
+    y = np.sin((X + 1)*np.pi) + np.random.normal(0, noise_sd, size=N)
     if plot:
         plt.scatter(X, y)
         plt.show()
@@ -197,8 +196,8 @@ def main(argv):
     X_train, y_train = generate_toy_data(plot=True)
 
     # construct model
-    noise_sd = estimate_noise(y_train)
-    y, parameters = build_model(X_train, noise_sd)
+    sig = estimate_noise(y_train)
+    y, parameters = build_model(X_train, sig)
 
     # evaluate prior
     inputs, samples = build_sampler(parameters, X_train)
