@@ -82,7 +82,7 @@ and, where $f$ is some nonlinear function (called an activation function), compu
 \[
     \bm a_1 = f(\bm z_1)
 \]
-where $f$ is applied element-wise. We call the dimensionality of $\bm z_1$ the number of ``neurons'' in the layer. Then, we repeat the above process on $\bm a_1$ using new weights $W_1$ and biases $\bm b_0$. Finally, let $\bm y = \bm a_n$ where $n$ is the number of layers in the neural network.
+where $f$ is (usually) applied element-wise. We call the dimensionality of $\bm z_1$ the number of ``neurons'' in the layer. Then, we repeat the above process on $\bm a_1$ using new weights $W_1$ and biases $\bm b_0$. Finally, let $\bm y = \bm a_n$ where $n$ is the number of layers in the neural network.
 
 This produces a model which maps input data $\bm x$ to output $\bm y$. Tuning the parameters of this sort of model is typically done via some variant of stochastic gradient descent.
 
@@ -95,7 +95,7 @@ We can turn the above traditional neural network into a Bayesian neural network 
 \end{align*}
 Additionally, to allow for noise in the model, let
 \[
-    \bm y \sim N(\bm a_n, \sigma (\bm 1))
+    \bm y \sim N\pn{\bm a_n, \sigma (\bm 1)}
 \]
 where $\sigma$ is a scalar representing the amount of noise in the model.
 
@@ -103,13 +103,15 @@ This produces a hierarchical Bayesian model. Updating this model with training d
 
 Since Bayesian neural networks are full, hierarchical Bayesian models, they can be used to produce more than simply point estimates. In particular, the posterior model can be sampled from to produce estimates of the model's uncertainty.
 
-\section{Example}
+\section{Our Experiment}
+
+\subsection{Setup}
 
 To showcase Bayesian neural networks, we will explore a toy Bayesian neural network. We will be using Edward for this, a Python library for probabilistic programming built on TensorFlow.\cite{edward} The example we will be using is modified from Edward's tutorials.\cite{tutorial} The full code for everything we will be doing can be accessed online on GitHub.\cite{code}
 
 We will be attempting to model the true data distribution
 \[
-    y \sim N(\sin(\pi(x+1)), 0.05)
+    y \sim N\pn{\sin(\pi(x+1)), 0.05}
 \]
 For our training data, we sampled 100 data points uniformly on the range $x \in [-1, -0.1]$ and 100 data points uniformly on the range $x \in [0.1, 1]$. This allows us to leave the range $x \in [-0.1, 0.1]$ empty to test our model's ability at interpolation. See Figure \ref{fig:1} for the sampled training data.
 
@@ -118,6 +120,8 @@ For our training data, we sampled 100 data points uniformly on the range $x \in 
 \caption{Training data sampled using the methodology given above.}
 \label{fig:1}
 \end{figure}
+
+\subsection{Procedure}
 
 We then constructed a three-layer feed-forward Bayesian neural network with 10 neurons per layer and activation function $f(x) = \tanh(x)$. We used standard normal priors for the weights and biases and modeled $y \sim N(\bm a_n, \sigma)$. We estimated $\sigma$ from the data using a finite difference method, which gave the approximation $\sigma \approx 0.0427$, which is very close to the true value $\sigma = 0.05$. To visualize our prior model, we sampled 10 different sets of weights and biases from the prior distribution and plotted the resulting models in Figure \ref{fig:2}.
 
@@ -129,9 +133,15 @@ We then constructed a three-layer feed-forward Bayesian neural network with 10 n
 
 \newpage
 
+While the large variety of different prior model curves shown in Figure \ref{fig:2} demonstrate that our prior is clearly very uncertain, they also demonstrate the power of our Bayesian neural network in terms of the large number of different types of relationships it is able to model. In particular, we see fairly linear models (model 5), models with something close to a step function in them (model 1), and even approximately normal models (model 3).
+
 We then updated our network using the training data given above. Since an analytical approach to computing the posterior is impossible, we approximated the posterior using variational inference. Specifically, we used variational expectation maximization with a Kullback-Leibler divergence loss function to approximate model parameters.\cite{klpq} We ran 1500 iterations of variational inference with 15 samples per iteration.
 
-To visualize our posterior, we again sampled 10 different sets of weights and biases, the resulting models of which are plotted in Figure \ref{fig:3}.
+\newpage
+
+\subsection{Results}
+
+To visualize our posterior, we again sampled 10 different sets of weights and biases, the resulting models of which are plotted in Figure \ref{fig:3}. Based on the posterior draws in Figure \ref{fig:3}, we can see that our model has captured the basic shape of the underlying distribution over the range with data, and has even managed to produce a fairly good interpolation for the $[-0.1, 0.1]$ range where no data was given.
 
 \begin{figure}
 \includegraphics{Figure_3.png}
@@ -141,7 +151,9 @@ To visualize our posterior, we again sampled 10 different sets of weights and bi
 
 \newpage
 
-If we take the posterior mean $\hat y = \bar y$ to be our point estimate for $y$, we can compare our model's mean estimate to the actual $X, y$ data. See Figure \ref{fig:4} for the posterior means plotted alongside the ground truth.
+If we take the posterior mean to be our point estimate $\hat y = \bar y$, we can compare our model's mean estimate to the actual $X, y$ data. See Figure \ref{fig:4} for the posterior means plotted alongside the ground truth.
+
+One interesting thing to note about our posterior is that it seems to have produced a better, more confident fit for the negative $x$ values than the positive $x$ values. This is due to the fact that the expectation maximization strategy we are using to tune our parameters is good at reaching local minima but necessarily global minima. Thus, if run many times, it tends to produce a very good approximation for either the negative values or the positive values, but not both, since each one is modeled well by a different local minima.
 
 \begin{figure}
 \includegraphics{Figure_4.png}
@@ -149,13 +161,16 @@ If we take the posterior mean $\hat y = \bar y$ to be our point estimate for $y$
 \label{fig:4}
 \end{figure}
 
-Since we have a full posterior distribution, we can also compare samples from the posterior to the actual data using various different metrics. One example metric is simply $\bar y$, which should be
+\newpage
+
+Since we have a full posterior distribution, we can also compare samples from the posterior to the actual data using various different metrics. This type of posterior analysis is known as a posterior predictive check.\cite{ppc} One example metric is simply $\bar y$, which we can calculate should be approximately
 \begin{align*}
-    & \bbm E\bk{\bar y} \\
-    & = E\bk{\sin(\pi(x+1)) \where x \in [-1, 1]} \\
+    & \bbm E\bk{\bar y \where x \in [-1, 1]} \\
+    & = \bbm E\bk{\sin(\pi(x+1)) \where x \in [-1, 1]} \\
     & = 0
 \end{align*}
-A plot of the posterior $\bar y$ distribution estimated based on 400 samples alongside the actual data $\bar y$ is given in Figure \ref{fig:5}.
+
+A plot of the posterior $\bar y$ distribution estimated based on 400 samples alongside the actual data $\bar y$ is given in Figure \ref{fig:5}. From Figure \ref{fig:5}, we can see that the actual $\bar y$ is relatively close to the center of the posterior $\bar y$ distribution, and is assigned a relatively high posterior probability. Thus, we can be fairly confident that, at least with respect to $\bar y$, our posterior is properly assigning a large probability to the true distribution.
 
 \begin{figure}
 \includegraphics[scale=0.8]{Figure_5.png}
@@ -164,6 +179,10 @@ A plot of the posterior $\bar y$ distribution estimated based on 400 samples alo
 \end{figure}
 
 \section{Conclusion}
+
+As demonstrated by our experiment, Bayesian neural networks are a powerful tool for modeling unknown relationships. Specifically, we demonstrated that for the particular problem where $y$ is a sinusoidal function of $x$ plus random noise, a simple three-layer Bayesian neural network with 10 neurons per layer is able to correctly approximate the true relationship.
+
+Furthermore, in comparison to traditional neural networks, we have shown how Bayesian neural networks can be significantly more informative, by allowing for prior and posterior draws as well as posterior predictive checks. For this reason, we believe that Bayesian neural networks are currently underutilized in machine learning applications where the informativeness of the model---such as knowing the model's uncertainty---is critical.
 
 \bibliography{bnns_sources}
 
